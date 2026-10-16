@@ -1,273 +1,87 @@
-const $ = (selector) => document.querySelector(selector);
-
-const room = $('#room');
-const notesElement = $('#notes');
-const particlesElement = $('#particles');
-const message = $('#message');
-const subcopy = $('#subcopy');
-const chapter = $('#chapter');
-const progress = $('#progress');
-const startButton = $('#startButton');
+const $ = (s) => document.querySelector(s);
+const room = $('#room'), levelSelect = $('#levelSelect'), lanesLevel = $('#lanesLevel'), calibrationLevel = $('#calibrationLevel');
+const notesElement = $('#notes'), particlesElement = $('#particles'), message = $('#message'), subcopy = $('#subcopy'), chapter = $('#chapter'), progress = $('#progress'), lanesStartButton = $('#lanesStartButton');
 const lanes = { left: $('#leftLane'), right: $('#rightLane') };
+const tapPad = $('#tapPad'), tapPadLabel = $('#tapPadLabel'), tapPadDetail = $('#tapPadDetail'), courseLabel = $('#courseLabel'), calibrationTitle = $('#calibrationTitle'), calibrationText = $('#calibrationText'), calibrationProgress = $('#calibrationProgress');
 
-const FALLBACK_CONFIG = { bpm: 96, timeSignature: [4, 4] };
-const NOTE_PATTERN = [
-  'left', 'right', 'left', 'left', 'right', 'left', 'right', 'right',
-  'left', 'right', 'left', 'right', 'right', 'left', 'left', 'right',
-  'left', 'right', 'left', 'right', 'right', 'left', 'right', 'left',
-];
+const NOTE_PATTERN = ['left','right','left','left','right','left','right','right','left','right','left','right','right','left','left','right','left','right','left','right','right','left','right','left'];
 const NOTE_LEAD_SECONDS = 1.85;
+const FALLBACK_LANES = { bpm: 96, timeSignature: [4, 4] };
+const FALLBACK_CALIBRATION = { bpm: 120, familiarisationCues: 4, trialDurationSeconds: 30, pitches: [400, 800, 1200] };
+const lanesConfig = readLanesConfig(window.STUDY_CONFIG?.lanes || window.STUDY_CONFIG);
+const calibrationConfig = readCalibrationConfig(window.STUDY_CONFIG?.calibration);
+let activeLevel = null, audioContext, masterGain, visualStartTime = 0, audioStartTime = 0, laneStarted = false, laneFinished = false, laneScore = 0, scheduledNotes = [], laneAnimationFrame, nextMetronomeBeat = 1;
+let calibrationState = 'ready', courseOrder = [], courseIndex = 0, currentCourse = null, calibrationTimers = [], calibrationResults = [];
 
-const studyConfig = readStudyConfig(window.STUDY_CONFIG);
-const secondsPerBeat = 60 / studyConfig.bpm;
-const beatsPerBar = studyConfig.timeSignature[0];
-
-let audioContext;
-let masterGain;
-let visualStartTime = 0;
-let audioStartTime = 0;
-let isStarted = false;
-let isFinished = false;
-let score = 0;
-let scheduledNotes = [];
-let animationFrame;
-let nextMetronomeBeat = 1;
-
-function readStudyConfig(candidate) {
-  const bpm = Number(candidate?.bpm);
-  const signature = candidate?.timeSignature;
-  const validSignature = Array.isArray(signature)
-    && signature.length === 2
-    && signature.every((value) => Number.isInteger(value) && value > 0);
-
-  if (Number.isFinite(bpm) && bpm > 0 && validSignature) {
-    return { bpm, timeSignature: signature };
-  }
-
-  console.warn('Invalid STUDY_CONFIG; using the default 96 BPM in 4/4.', candidate);
-  return FALLBACK_CONFIG;
+function readLanesConfig(candidate) {
+  const bpm = Number(candidate?.bpm), signature = candidate?.timeSignature;
+  return Number.isFinite(bpm) && bpm > 0 && Array.isArray(signature) && signature.length === 2 && signature.every((x) => Number.isInteger(x) && x > 0) ? { bpm, timeSignature: signature } : FALLBACK_LANES;
 }
-
-function nowInSeconds() {
-  return performance.now() / 1000;
+function readCalibrationConfig(candidate) {
+  const c = { ...FALLBACK_CALIBRATION, ...candidate }, validPitches = Array.isArray(c.pitches) && c.pitches.length === 3 && c.pitches.every((x) => Number.isFinite(Number(x)) && Number(x) > 0);
+  return Number(c.bpm) > 0 && Number.isInteger(Number(c.familiarisationCues)) && Number(c.familiarisationCues) >= 0 && Number(c.trialDurationSeconds) > 0 && validPitches ? { bpm: Number(c.bpm), familiarisationCues: Number(c.familiarisationCues), trialDurationSeconds: Number(c.trialDurationSeconds), pitches: c.pitches.map(Number) } : FALLBACK_CALIBRATION;
 }
-
-function createAudio() {
-  audioContext = new AudioContext();
-  audioStartTime = audioContext.currentTime;
-  masterGain = audioContext.createGain();
-  masterGain.gain.value = 0.16;
-  masterGain.connect(audioContext.destination);
-  scheduleMetronome();
+function nowInSeconds() { return performance.now() / 1000; }
+function ensureAudio() {
+  if (!audioContext) { audioContext = new (window.AudioContext || window.webkitAudioContext)(); masterGain = audioContext.createGain(); masterGain.gain.value = 0.48; masterGain.connect(audioContext.destination); }
+  if (audioContext.state === 'suspended') audioContext.resume();
 }
-
 function playTone(at, frequency, duration, type, volume) {
-  const oscillator = audioContext.createOscillator();
-  const gain = audioContext.createGain();
-
-  oscillator.type = type;
-  oscillator.frequency.setValueAtTime(frequency, at);
-  gain.gain.setValueAtTime(0.0001, at);
-  gain.gain.exponentialRampToValueAtTime(volume, at + 0.012);
-  gain.gain.exponentialRampToValueAtTime(0.0001, at + duration);
-  oscillator.connect(gain).connect(masterGain);
-  oscillator.start(at);
-  oscillator.stop(at + duration + 0.03);
+  const oscillator = audioContext.createOscillator(), gain = audioContext.createGain();
+  oscillator.type = type; oscillator.frequency.setValueAtTime(frequency, at); gain.gain.setValueAtTime(0.0001, at); gain.gain.exponentialRampToValueAtTime(volume, at + 0.009); gain.gain.exponentialRampToValueAtTime(0.0001, at + duration);
+  oscillator.connect(gain).connect(masterGain); oscillator.start(at); oscillator.stop(at + duration + 0.03);
 }
 
-function scheduleMetronome() {
-  if (!isStarted || isFinished) return;
-
-  // Look ahead to keep metronome timing steady when rendering is busy.
-  const scheduleUntil = audioContext.currentTime + 3;
-  while (audioStartTime + nextMetronomeBeat * secondsPerBeat < scheduleUntil) {
-    const beatNumber = nextMetronomeBeat;
-    const at = audioStartTime + beatNumber * secondsPerBeat;
-    const isDownbeat = beatNumber % beatsPerBar === 0;
-    playTone(at, isDownbeat ? 104 : 78, 0.13, 'sine', isDownbeat ? 0.45 : 0.18);
-    if (beatNumber % 2 === 1) playTone(at, 330, 0.045, 'triangle', 0.035);
-    nextMetronomeBeat += 1;
-  }
-
-  window.setTimeout(scheduleMetronome, 2600);
+function showLevel(level) {
+  activeLevel = level; levelSelect.hidden = true; lanesLevel.hidden = level !== 'lanes'; calibrationLevel.hidden = level !== 'calibration'; room.classList.toggle('calibration-mode', level === 'calibration');
+  if (level === 'calibration') resetCalibration();
 }
+document.querySelectorAll('[data-level]').forEach((button) => button.addEventListener('click', () => showLevel(button.dataset.level)));
 
-function prepareNotes() {
-  const introDuration = beatsPerBar * secondsPerBeat;
-  scheduledNotes = NOTE_PATTERN.map((side, index) => ({
-    side,
-    time: visualStartTime + introDuration + index * secondsPerBeat,
-    done: false,
-    element: null,
-  }));
+// Level 01: preserved two-lane game.
+function startLanes() {
+  if (laneStarted) return; ensureAudio(); laneStarted = true; laneFinished = false; laneScore = 0; nextMetronomeBeat = 1; visualStartTime = nowInSeconds(); audioStartTime = audioContext.currentTime; prepareNotes(); scheduleLaneMetronome(); lanesStartButton.classList.add('hide'); chapter.textContent = `COURSE 01 · ${lanesConfig.bpm} BPM · ${lanesConfig.timeSignature.join('/')}`; message.textContent = 'Follow the quiet current'; subcopy.textContent = 'A for left, L for right. There is room to be close.'; tickLanes();
 }
-
-function startExperience() {
-  if (isStarted) return;
-
-  isStarted = true;
-  visualStartTime = nowInSeconds();
-  createAudio();
-  prepareNotes();
-  startButton.classList.add('hide');
-  chapter.textContent = `COURSE 01 · ${studyConfig.bpm} BPM · ${studyConfig.timeSignature.join('/')}`;
-  message.textContent = 'Follow the quiet current';
-  subcopy.textContent = 'A for left, L for right. There is room to be close.';
-  tick();
+function scheduleLaneMetronome() {
+  if (!laneStarted || laneFinished) return; const secondsPerBeat = 60 / lanesConfig.bpm, until = audioContext.currentTime + 3;
+  while (audioStartTime + nextMetronomeBeat * secondsPerBeat < until) { const beat = nextMetronomeBeat, at = audioStartTime + beat * secondsPerBeat, downbeat = beat % lanesConfig.timeSignature[0] === 0; playTone(at, downbeat ? 104 : 78, 0.13, 'sine', downbeat ? 0.45 : 0.5); if (beat % 2 === 1) playTone(at, 330, 0.045, 'triangle', 0.035); nextMetronomeBeat += 1; }
+  window.setTimeout(scheduleLaneMetronome, 2600);
 }
-
-function tick() {
-  if (!isStarted || isFinished) return;
-
-  const now = nowInSeconds();
-  const phase = ((now - visualStartTime) / secondsPerBeat) * Math.PI * 2;
-  room.style.setProperty('--pulse', ((Math.sin(phase) + 1) / 2).toFixed(2));
-  scheduledNotes.forEach((note) => updateNote(note, now));
-
-  if (scheduledNotes.length && scheduledNotes.every((note) => note.done)) finishExperience();
-  if (!isFinished) animationFrame = requestAnimationFrame(tick);
+function prepareNotes() { const beat = 60 / lanesConfig.bpm, intro = lanesConfig.timeSignature[0] * beat; scheduledNotes = NOTE_PATTERN.map((side, i) => ({ side, time: visualStartTime + intro + i * beat, done: false, element: null })); }
+function tickLanes() {
+  if (!laneStarted || laneFinished) return; const now = nowInSeconds(), beat = 60 / lanesConfig.bpm; room.style.setProperty('--pulse', ((Math.sin(((now - visualStartTime) / beat) * Math.PI * 2) + 1) / 2).toFixed(2)); scheduledNotes.forEach((note) => updateNote(note, now)); if (scheduledNotes.length && scheduledNotes.every((note) => note.done)) finishLanes(); if (!laneFinished) laneAnimationFrame = requestAnimationFrame(tickLanes);
 }
-
-function updateNote(note, now) {
-  const secondsUntilHit = note.time - now;
-  if (secondsUntilHit < NOTE_LEAD_SECONDS && secondsUntilHit > -0.22 && !note.element) {
-    note.element = createNoteElement(note.side);
-    notesElement.append(note.element);
-  }
-  if (note.element) positionNote(note, secondsUntilHit);
-
-  if (secondsUntilHit < -0.23 && !note.done) {
-    note.done = true;
-    note.element?.remove();
-    showFeedback('Reset Flow', 'Let the next beat arrive.');
-  }
+function updateNote(note, now) { const until = note.time - now; if (until < NOTE_LEAD_SECONDS && until > -0.22 && !note.element) { note.element = createNoteElement(note.side); notesElement.append(note.element); } if (note.element) positionNote(note, until); if (until < -0.23 && !note.done) { note.done = true; note.element?.remove(); showLaneFeedback('Reset Flow', 'Let the next beat arrive.'); } }
+function createNoteElement(side) { const el = document.createElement('div'); el.className = `note ${side}`; el.style.setProperty('--note', side === 'left' ? '#c7a8ff' : '#9cebd4'); return el; }
+function positionNote(note, until) { const box = lanes[note.side].getBoundingClientRect(), hitY = box.top + box.height * 0.82, journey = 1 - until / NOTE_LEAD_SECONDS; note.element.style.top = `${window.innerHeight * 0.17 + (hitY - window.innerHeight * 0.17) * journey}px`; note.element.classList.toggle('live', until < NOTE_LEAD_SECONDS && until > -0.12); }
+function showLaneFeedback(title, detail, restore = false) { message.textContent = title; subcopy.textContent = detail; if (restore) window.setTimeout(() => { if (!laneFinished) { message.textContent = 'Keep moving gently'; subcopy.textContent = 'The room is listening.'; } }, 620); }
+function pressLane(side) {
+  if (!laneStarted) return startLanes(); if (laneFinished) return; const now = nowInSeconds(), note = scheduledNotes.filter((item) => item.side === side && !item.done).sort((a,b) => Math.abs(a.time-now) - Math.abs(b.time-now))[0], error = note ? Math.abs(now - note.time) : Infinity; createBurst(side, error < 0.22); if (!note || error >= 0.22) return showLaneFeedback('Reset Flow', 'No rush — meet the next marker.'); note.done = true; note.element?.remove(); laneScore += 1; progress.textContent = `${laneScore} / ${NOTE_PATTERN.length}`; showLaneFeedback(error < 0.09 ? 'In Sync' : 'Close', error < 0.09 ? 'Exactly where the pulse lands.' : 'Still part of the flow.', true); if (laneScore === 8) { chapter.textContent = 'COURSE 01 · OPENING UP'; room.style.background = 'radial-gradient(ellipse at 50% 68%,#394047,#191e27 43%,#11141b 75%)'; } if (laneScore === 16) chapter.textContent = 'COURSE 01 · LAST TURN'; if (laneScore === NOTE_PATTERN.length) finishLanes();
 }
+function createBurst(side, successful) { const box = lanes[side].getBoundingClientRect(), color = side === 'left' ? '#c7a8ff' : '#9cebd4', lane = lanes[side]; lane.style.setProperty('--flash', color); lane.classList.add('flash'); window.setTimeout(() => lane.classList.remove('flash'), 150); for (let i = 0; i < (successful ? 13 : 5); i += 1) { const p = document.createElement('i'); p.className = 'particle'; p.style.left = `${box.left + box.width / 2}px`; p.style.top = `${box.top + box.height * 0.82}px`; p.style.setProperty('--c', side === 'left' ? '#d8c3ff' : '#b6f8e7'); p.style.setProperty('--x', `${(Math.random() - .5) * 120}px`); p.style.setProperty('--y', `${-20 - Math.random() * 100}px`); particlesElement.append(p); window.setTimeout(() => p.remove(), 900); } }
+function finishLanes() { if (laneFinished) return; laneFinished = true; cancelAnimationFrame(laneAnimationFrame); room.classList.add('complete'); chapter.textContent = 'COURSE COMPLETE'; message.textContent = 'You moved with the room'; subcopy.textContent = 'Take a breath. Press Begin again to restart.'; lanesStartButton.textContent = 'Begin again ↵'; lanesStartButton.classList.remove('hide'); lanesStartButton.onclick = () => window.location.reload(); }
 
-function createNoteElement(side) {
-  const element = document.createElement('div');
-  element.className = `note ${side}`;
-  element.style.setProperty('--note', side === 'left' ? '#c7a8ff' : '#9cebd4');
-  return element;
+// Level 02: one responsive pad, randomized 400 / 800 / 1200 Hz courses.
+function shuffled(values) { const r = [...values]; for (let i = r.length - 1; i > 0; i -= 1) { const j = Math.floor(Math.random() * (i + 1)); [r[i], r[j]] = [r[j], r[i]]; } return r; }
+function cancelCalibrationTimers() { calibrationTimers.forEach(clearTimeout); calibrationTimers = []; }
+function resetCalibration() { cancelCalibrationTimers(); calibrationState = 'ready'; courseOrder = shuffled(calibrationConfig.pitches); courseIndex = 0; calibrationResults = []; calibrationTitle.textContent = 'Tap with the cue'; calibrationText.textContent = 'Three short courses play in a random order. Listen for four beats, then tap the pad once for every cue.'; courseLabel.textContent = 'PITCH CALIBRATION · READY'; calibrationProgress.textContent = '3 courses · randomized pitch order'; tapPadLabel.textContent = 'Tap to begin'; tapPadDetail.textContent = `${calibrationConfig.bpm} BPM · ${calibrationConfig.trialDurationSeconds} seconds per course`; tapPad.classList.remove('cueing','accepting'); }
+function startNextCourse() {
+  ensureAudio(); if (courseIndex >= courseOrder.length) return showCalibrationComplete(); const pitch = courseOrder[courseIndex], interval = 60 / calibrationConfig.bpm, responseCues = Math.round(calibrationConfig.trialDurationSeconds / interval), startAt = audioContext.currentTime + .55, allCues = calibrationConfig.familiarisationCues + responseCues;
+  currentCourse = { pitch, interval, startAt, responseCues, cueTimes: [], responseTimes: [], responses: [], courseNumber: courseIndex + 1 }; calibrationState = 'familiarising'; courseLabel.textContent = `COURSE ${courseIndex + 1} OF 3 · LISTEN`; calibrationTitle.textContent = 'Find the pulse'; calibrationText.textContent = 'Listen only. The pad opens after four cues.'; calibrationProgress.textContent = `${courseIndex + 1} / 3 · ${calibrationConfig.bpm} BPM`; tapPadLabel.textContent = 'Listen'; tapPadDetail.textContent = 'Tap when the pad opens'; tapPad.classList.add('cueing'); tapPad.classList.remove('accepting');
+  for (let i = 0; i < allCues; i += 1) { const at = startAt + i * interval; if (i >= calibrationConfig.familiarisationCues) currentCourse.cueTimes.push(at); playTone(at, pitch, .055, 'sine', .38); scheduleCalibrationCue(at, i === calibrationConfig.familiarisationCues - 1, i >= calibrationConfig.familiarisationCues); }
+  calibrationTimers.push(setTimeout(openTapPad, Math.max(0, (startAt + calibrationConfig.familiarisationCues * interval - audioContext.currentTime) * 1000))); calibrationTimers.push(setTimeout(finishCalibrationCourse, Math.max(0, (startAt + allCues * interval - audioContext.currentTime + 140) * 1000)));
 }
-
-function positionNote(note, secondsUntilHit) {
-  const laneBox = lanes[note.side].getBoundingClientRect();
-  const hitY = laneBox.top + laneBox.height * 0.82;
-  const journey = 1 - secondsUntilHit / NOTE_LEAD_SECONDS;
-  const y = window.innerHeight * 0.17 + (hitY - window.innerHeight * 0.17) * journey;
-
-  note.element.style.top = `${y}px`;
-  note.element.classList.toggle('live', secondsUntilHit < NOTE_LEAD_SECONDS && secondsUntilHit > -0.12);
+function scheduleCalibrationCue(at, lastListen, responseCue) { calibrationTimers.push(setTimeout(() => { if (calibrationState === 'familiarising' || calibrationState === 'running') { tapPad.classList.remove('beat'); void tapPad.offsetWidth; tapPad.classList.add('beat'); if (lastListen) tapPadDetail.textContent = 'Get ready'; if (responseCue) tapPadDetail.textContent = 'Tap once per cue'; } }, Math.max(0, (at - audioContext.currentTime) * 1000))); }
+function openTapPad() { if (calibrationState !== 'familiarising') return; calibrationState = 'running'; courseLabel.textContent = `COURSE ${courseIndex + 1} OF 3 · TAP`; calibrationTitle.textContent = 'Tap with the cue'; calibrationText.textContent = 'Tap the pad once for every cue.'; tapPadLabel.textContent = 'Tap'; tapPad.classList.remove('cueing'); tapPad.classList.add('accepting'); }
+function registerTap() {
+  if (calibrationState === 'ready' || calibrationState === 'between' || calibrationState === 'complete') { if (calibrationState === 'complete') resetCalibration(); startNextCourse(); return; }
+  if (calibrationState !== 'running' || !audioContext) return; const time = audioContext.currentTime; currentCourse.responseTimes.push(time); const unused = currentCourse.cueTimes.map((cue,i) => ({cue,i})).filter(({i}) => !currentCourse.responses.some((r) => r.cueIndex === i)).sort((a,b) => Math.abs(a.cue-time) - Math.abs(b.cue-time))[0]; if (unused && Math.abs(unused.cue - time) <= currentCourse.interval / 2) currentCourse.responses.push({ cueIndex: unused.i, tap: time, asynchronyMs: (time - unused.cue) * 1000 }); else currentCourse.responses.push({ cueIndex: null, tap: time, asynchronyMs: null }); tapPad.classList.remove('tapped'); void tapPad.offsetWidth; tapPad.classList.add('tapped');
 }
-
-function showFeedback(title, detail, restoreDefault = false) {
-  message.textContent = title;
-  subcopy.textContent = detail;
-  if (!restoreDefault) return;
-
-  window.setTimeout(() => {
-    if (isFinished) return;
-    message.textContent = 'Keep moving gently';
-    subcopy.textContent = 'The room is listening.';
-  }, 620);
+function finishCalibrationCourse() {
+  if (!currentCourse || !['running','familiarising'].includes(calibrationState)) return; const matched = currentCourse.responses.filter((r) => r.cueIndex !== null), extra = currentCourse.responses.length - matched.length, missed = currentCourse.responseCues - matched.length, mean = matched.length ? matched.reduce((sum,r) => sum + Math.abs(r.asynchronyMs), 0) / matched.length : null;
+  calibrationResults.push({ course: currentCourse.courseNumber, pitchHz: currentCourse.pitch, bpm: calibrationConfig.bpm, cueIntervalMs: currentCourse.interval * 1000, expectedCues: currentCourse.responseCues, responses: currentCourse.responseTimes.length, hits: matched.length, missed, extra, meanAbsoluteAsynchronyMs: mean, cueTimesMs: currentCourse.cueTimes.map((x) => x * 1000), responseTimesMs: currentCourse.responseTimes.map((x) => x * 1000), asynchroniesMs: matched.map((r) => r.asynchronyMs) }); courseIndex += 1; calibrationState = 'between'; tapPad.classList.remove('accepting'); tapPadLabel.textContent = courseIndex < 3 ? 'Next course' : 'See results'; tapPadDetail.textContent = courseIndex < 3 ? 'Take a breath, then continue' : 'Finish the calibration'; courseLabel.textContent = `COURSE ${courseIndex} COMPLETE`; calibrationTitle.textContent = `${matched.length} matched taps`; calibrationText.textContent = `${missed} missed · ${extra} extra${mean === null ? '' : ` · ${Math.round(mean)} ms average absolute asynchrony`}`; calibrationProgress.textContent = `${courseIndex} / 3 complete`;
 }
+function showCalibrationComplete() { calibrationState = 'complete'; const summary = calibrationResults.map((r) => `${r.pitchHz} Hz: ${r.hits}/${r.expectedCues}`).join(' · '); window.latestPitchCalibration = { completedAt: new Date().toISOString(), randomizedCourseOrderHz: courseOrder, settings: calibrationConfig, courses: calibrationResults }; console.table(calibrationResults.map(({pitchHz,hits,expectedCues,missed,extra,meanAbsoluteAsynchronyMs}) => ({pitchHz,hits,expectedCues,missed,extra,meanAbsoluteAsynchronyMs}))); courseLabel.textContent = 'PITCH CALIBRATION · COMPLETE'; calibrationTitle.textContent = 'All courses complete'; calibrationText.textContent = `${summary}. Results are available in window.latestPitchCalibration.`; calibrationProgress.textContent = 'The three pitch conditions used the same cue spacing.'; tapPadLabel.textContent = 'Run again'; tapPadDetail.textContent = 'A new random order will be selected'; }
 
-function press(side) {
-  if (!isStarted) {
-    startExperience();
-    return;
-  }
-  if (isFinished) return;
-
-  const now = nowInSeconds();
-  const note = closestAvailableNote(side, now);
-  const timingError = note ? Math.abs(now - note.time) : Infinity;
-  createBurst(side, timingError < 0.22);
-
-  if (!note || timingError >= 0.22) {
-    showFeedback('Reset Flow', 'No rush — meet the next marker.');
-    return;
-  }
-  resolveHit(note, timingError);
-}
-
-function closestAvailableNote(side, now) {
-  return scheduledNotes
-    .filter((note) => note.side === side && !note.done)
-    .sort((a, b) => Math.abs(a.time - now) - Math.abs(b.time - now))[0];
-}
-
-function resolveHit(note, timingError) {
-  note.done = true;
-  note.element?.remove();
-  score += 1;
-  progress.textContent = `${score} / ${NOTE_PATTERN.length}`;
-
-  const inSync = timingError < 0.09;
-  showFeedback(inSync ? 'In Sync' : 'Close', inSync ? 'Exactly where the pulse lands.' : 'Still part of the flow.', true);
-  updateCourseProgress();
-  if (score === NOTE_PATTERN.length) finishExperience();
-}
-
-function updateCourseProgress() {
-  if (score === 8) {
-    chapter.textContent = 'COURSE 01 · OPENING UP';
-    room.style.background = 'radial-gradient(ellipse at 50% 68%,#394047,#191e27 43%,#11141b 75%)';
-  }
-  if (score === 16) {
-    chapter.textContent = 'COURSE 01 · LAST TURN';
-    subcopy.textContent = 'The room is bright now. Finish softly.';
-  }
-}
-
-function createBurst(side, successful) {
-  const laneBox = lanes[side].getBoundingClientRect();
-  const color = side === 'left' ? '#c7a8ff' : '#9cebd4';
-  const lane = lanes[side];
-
-  lane.style.setProperty('--flash', color);
-  lane.classList.add('flash');
-  window.setTimeout(() => lane.classList.remove('flash'), 150);
-
-  const particleCount = successful ? 13 : 5;
-  for (let index = 0; index < particleCount; index += 1) {
-    const particle = document.createElement('i');
-    particle.className = 'particle';
-    particle.style.left = `${laneBox.left + laneBox.width / 2}px`;
-    particle.style.top = `${laneBox.top + laneBox.height * 0.82}px`;
-    particle.style.setProperty('--c', side === 'left' ? '#d8c3ff' : '#b6f8e7');
-    particle.style.setProperty('--x', `${(Math.random() - 0.5) * 120}px`);
-    particle.style.setProperty('--y', `${-20 - Math.random() * 100}px`);
-    particlesElement.append(particle);
-    window.setTimeout(() => particle.remove(), 900);
-  }
-}
-
-function finishExperience() {
-  if (isFinished) return;
-
-  isFinished = true;
-  cancelAnimationFrame(animationFrame);
-  room.classList.add('complete');
-  chapter.textContent = 'COURSE COMPLETE';
-  message.textContent = 'You moved with the room';
-  subcopy.textContent = 'Take a breath. Press Begin again to restart.';
-  startButton.textContent = 'Begin again ↵';
-  startButton.classList.remove('hide');
-  startButton.onclick = () => window.location.reload();
-}
-
-startButton.addEventListener('click', startExperience);
-window.addEventListener('keydown', (event) => {
-  if (event.repeat) return;
-  const key = event.key.toLowerCase();
-  if (key === 'a') {
-    event.preventDefault();
-    press('left');
-  }
-  if (key === 'l') {
-    event.preventDefault();
-    press('right');
-  }
-  if (key === 'enter' && !isStarted) startExperience();
-});
+lanesStartButton.addEventListener('click', startLanes); tapPad.addEventListener('click', registerTap);
+window.addEventListener('keydown', (event) => { if (event.repeat) return; const key = event.key.toLowerCase(); if (activeLevel === 'lanes') { if (key === 'a' || key === 'l') { event.preventDefault(); pressLane(key === 'a' ? 'left' : 'right'); } if (key === 'enter' && !laneStarted) startLanes(); } if (activeLevel === 'calibration' && event.code === 'Space') { event.preventDefault(); registerTap(); } });

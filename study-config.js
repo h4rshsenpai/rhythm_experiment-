@@ -1,11 +1,11 @@
-/**
- * Configurable settings
- */
+/** Researcher settings. Reload the page after changing these values. */
 window.STUDY_CONFIG = {
-  // Tempo in quarter-note beats per minute.
-  bpm: 96,
-
-  // Meter written as [beats per bar, note value]. Examples: [4, 4], [3, 4], [6, 8].
-  // The current click and visual downbeat use beatsPerBar (the first number).
-  timeSignature: [4, 4],
+  lanes: { bpm: 96, timeSignature: [4, 4] },
+  calibration: {
+    // All courses use the same 120 BPM timing (one cue every 500 ms).
+    bpm: 120,
+    familiarisationCues: 4,
+    trialDurationSeconds: 30,
+    pitches: [400, 800, 1200],
+  },
 };
