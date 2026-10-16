@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#12151d" />
+    <title>Still / In Sync</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="room" id="room">
+      <div class="glow glow-left"></div><div class="glow glow-right"></div>
+      <div class="ceiling-line"></div><div class="floor"></div>
+      <section class="hud" aria-live="polite">
+        <p class="eyebrow" id="chapter">A SMALL RHYTHM ROOM</p>
+        <h1 id="message">Find the pulse</h1>
+        <p class="subcopy" id="subcopy">Press A and L when the markers meet the line.</p>
+      </section>
+      <section class="lane-wrap" aria-label="Rhythm lanes">
+        <div class="lane" id="leftLane"><span class="key">A</span><span class="lane-name">LEFT</span><div class="hit-line"></div></div>
+        <div class="lane" id="rightLane"><span class="key">L</span><span class="lane-name">RIGHT</span><div class="hit-line"></div></div>
+      </section>
+      <div id="notes" aria-hidden="true"></div>
+      <div id="particles" aria-hidden="true"></div>
+      <button id="startButton" class="start" type="button">Enter the room <span>↵</span></button>
+      <footer><span id="progress">0 / 24</span><span class="dot">•</span><span>Headphones welcome</span></footer>
+    </main>
+    <!-- Edit study-config.js before opening this page for a participant session. -->
+    <script src="study-config.js"></script>
+    <script src="game.js"></script>
+  </body>
+</html>
