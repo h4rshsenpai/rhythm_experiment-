@@ -1,15 +1,19 @@
 # Still / In Sync
 
-Open `index.html` in a modern browser. The start screen contains two levels:
+Open `index.html` in a modern browser. The site has four static pages:
 
-- **Two Lanes** preserves the original A/L rhythm experience.
-- **Pitch Calibration** is a mobile-friendly one-pad tapping task. It presents three 30-second courses in a newly randomized order on each run. The timing is identical for all courses: 120 BPM (one cue every 500 ms), with four listen-only familiarisation cues. Only the sine-click pitch changes: 400, 800, or 1200 Hz.
+- **Home** (`index.html`) introduces the study collection.
+- **Experiments** (`experiments.html`) lists the available activities.
+- **Pitch Calibration** (`calibration.html`) is the first experiment.
+- **Two Lanes** (`two-lanes.html`) is the A/L rhythm experience.
 
-In Pitch Calibration, tap the large pad (or press Space) once for every cue after the familiarisation period. Each course records matched taps, missed and extra responses, and mean absolute asynchrony. On completion, the complete raw result object is available as `window.latestPitchCalibration` in the browser console; a compact table is also logged there.
+## Pitch Calibration
+
+Calibration presents three pitch courses (400, 800, and 1200 Hz) in a new random order on every run. Each course has four listen-only cues, a two-second silent pause, and four scored 4/4 measures (16 response cues at the default 120 BPM). After each non-final course, tap once more to begin the next course; that continuation tap is not scored. The final report is available to copy and as `window.latestPitchCalibration` in the browser console.
 
 ## Researcher setup
 
-Edit [`study-config.js`](./study-config.js) before loading the page and reload after saving. The default calibration values are intentionally fixed so that pitch is the only course-level manipulation:
+Edit [`study-config.js`](./study-config.js) before loading an experiment, then reload the page:
 
 ```js
 window.STUDY_CONFIG = {
@@ -17,7 +21,9 @@ window.STUDY_CONFIG = {
   calibration: {
     bpm: 120,
     familiarisationCues: 4,
-    trialDurationSeconds: 30,
+    interPhaseDelaySeconds: 2,
+    responseMeasures: 4,
+    timeSignature: [4, 4],
     pitches: [400, 800, 1200],
   },
 };

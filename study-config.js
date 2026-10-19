@@ -2,10 +2,12 @@
 window.STUDY_CONFIG = {
   lanes: { bpm: 96, timeSignature: [4, 4] },
   calibration: {
-    // All courses use the same 120 BPM timing (one cue every 500 ms).
+    // Every course has four listen-only cues, a two-second pause, then four 4/4 measures.
     bpm: 120,
     familiarisationCues: 4,
-    trialDurationSeconds: 10,
+    interPhaseDelaySeconds: 2,
+    responseMeasures: 4,
+    timeSignature: [4, 4],
     pitches: [400, 800, 1200],
   },
 };

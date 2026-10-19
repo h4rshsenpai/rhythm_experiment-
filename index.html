@@ -1,70 +1,11 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#12151d" />
-    <title>Still / In Sync</title>
-    <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body>
-    <main class="room" id="room">
-      <div class="glow glow-left"></div><div class="glow glow-right"></div>
-      <div class="ceiling-line"></div><div class="floor"></div>
-
-      <section class="level-select" id="levelSelect" aria-labelledby="levelTitle">
-        <p class="eyebrow">STILL / IN SYNC</p>
-        <h1 id="levelTitle">Choose a level</h1>
-        <p class="level-intro">A small rhythm room with a two-lane game and a one-button pitch calibration task.</p>
-        <div class="level-cards">
-          <button class="level-card" type="button" data-level="lanes">
-            <span class="card-number">LEVEL 01</span><strong>Two Lanes</strong>
-            <span>Follow left and right markers with A and L.</span>
-          </button>
-          <button class="level-card" type="button" data-level="calibration">
-            <span class="card-number">LEVEL 02</span><strong>Pitch Calibration</strong>
-            <span>Tap one pad in time with a steady cue.</span>
-          </button>
-        </div>
-      </section>
-
-      <section class="lanes-level" id="lanesLevel" hidden>
-        <button id="lanesBackButton" class="level-back" type="button">← Levels</button>
-        <section class="hud" aria-live="polite">
-          <p class="eyebrow" id="chapter">A SMALL RHYTHM ROOM</p>
-          <h1 id="message">Find the pulse</h1>
-          <p class="subcopy" id="subcopy">Press A and L when the markers meet the line.</p>
-        </section>
-        <section class="lane-wrap" aria-label="Rhythm lanes">
-          <div class="lane" id="leftLane"><span class="key">A</span><span class="lane-name">LEFT</span><div class="hit-line"></div></div>
-          <div class="lane" id="rightLane"><span class="key">L</span><span class="lane-name">RIGHT</span><div class="hit-line"></div></div>
-        </section>
-        <div id="notes" aria-hidden="true"></div>
-        <div id="particles" aria-hidden="true"></div>
-        <button id="lanesStartButton" class="start" type="button">Enter the room <span>↵</span></button>
-        <footer><span id="progress">0 / 24</span><span class="dot">•</span><span>Headphones welcome</span></footer>
-      </section>
-
-      <section class="calibration-level" id="calibrationLevel" hidden aria-labelledby="calibrationTitle">
-        <button id="calibrationBackButton" class="level-back" type="button">← Levels</button>
-        <div class="calibration-copy">
-          <p class="eyebrow" id="courseLabel">PITCH CALIBRATION · READY</p>
-          <h1 id="calibrationTitle">Tap with the cue</h1>
-          <p id="calibrationText">Three short courses play in a random order. Listen for four beats, then tap the pad once for every cue.</p>
-        </div>
-        <button id="tapPad" class="tap-pad" type="button" aria-describedby="calibrationText">
-          <span class="tap-pad-inner"><span id="tapPadLabel">Tap to begin</span><small id="tapPadDetail">120 BPM · 30 seconds per course</small></span>
-        </button>
-        <p class="calibration-progress" id="calibrationProgress">3 courses · randomized pitch order</p>
-        <section class="calibration-results" id="calibrationResults" hidden aria-labelledby="resultsTitle">
-          <h2 id="resultsTitle">Your results</h2>
-          <pre id="calibrationReport" tabindex="0"></pre>
-          <button id="copyResultsButton" class="copy-results" type="button">Copy results</button>
-          <p id="copyResultsStatus" class="copy-results-status" aria-live="polite"></p>
-        </section>
-      </section>
+  <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="theme-color" content="#10131a" /><title>Still / In Sync</title><link rel="stylesheet" href="styles.css" /></head>
+  <body class="site-page home-page">
+    <main class="room page-room"><div class="glow glow-left"></div><div class="glow glow-right"></div><div class="ceiling-line"></div><div class="floor"></div>
+      <nav class="site-nav" aria-label="Primary navigation"><a class="wordmark" href="index.html">STILL / IN SYNC</a><a href="experiments.html">Experiments</a></nav>
+      <section class="hero"><p class="eyebrow">RHYTHM STUDIES · 01</p><h1>Find the<br><em>shared</em> pulse.</h1><p>A small collection of listening and timing experiments. Put on headphones, settle in, and follow the cue.</p><a class="button-link" href="experiments.html">Explore experiments <span>↗</span></a></section>
+      <p class="hero-note">Built for close listening · keyboard and touch friendly</p>
     </main>
-    <script src="study-config.js"></script>
-    <script src="game.js"></script>
   </body>
 </html>

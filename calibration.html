@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="theme-color" content="#19212b" /><title>Pitch Calibration — Still / In Sync</title><link rel="stylesheet" href="styles.css" /></head>
+  <body class="experiment-page calibration-page">
+    <main class="room calibration-mode"><div class="glow glow-left"></div><div class="glow glow-right"></div><div class="ceiling-line"></div><div class="floor"></div>
+      <nav class="site-nav experiment-nav" aria-label="Primary navigation"><a class="wordmark" href="index.html">STILL / IN SYNC</a><a href="experiments.html">← Experiments</a></nav>
+      <section class="calibration-level" aria-labelledby="calibrationTitle">
+        <div class="calibration-copy"><p class="eyebrow" id="courseLabel">PITCH CALIBRATION · READY</p><h1 id="calibrationTitle">Tap with the cue</h1><p id="calibrationText">Three short courses play in a random order. Listen for four beats, pause for two seconds, then tap with four measures of cues.</p></div>
+        <button id="tapPad" class="tap-pad" type="button" aria-describedby="calibrationText"><span class="tap-pad-inner"><span id="tapPadLabel">Tap to begin</span><small id="tapPadDetail">120 BPM · 4 measures per course</small></span></button>
+        <p class="calibration-progress" id="calibrationProgress">3 courses · randomized pitch order</p>
+        <section class="calibration-results" id="calibrationResults" hidden aria-labelledby="resultsTitle"><h2 id="resultsTitle">Your results</h2><pre id="calibrationReport" tabindex="0"></pre><button id="copyResultsButton" class="copy-results" type="button">Copy results</button><p id="copyResultsStatus" class="copy-results-status" aria-live="polite"></p></section>
+      </section>
+    </main>
+    <script src="study-config.js"></script><script src="game.js"></script>
+  </body>
+</html>
