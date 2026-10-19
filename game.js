@@ -40,7 +40,13 @@ function registerTap() {
   if (calibrationState === 'complete') return resetCalibration();
   if (calibrationState !== 'running' || !audioContext) return;
   const time = audioContext.currentTime; currentCourse.responseTimes.push(time); const unused = currentCourse.cueTimes.map((cue, index) => ({ cue, index })).filter(({ index }) => !currentCourse.responses.some((response) => response.cueIndex === index)).sort((a, b) => Math.abs(a.cue - time) - Math.abs(b.cue - time))[0];
-  if (unused && Math.abs(unused.cue - time) <= currentCourse.interval / 2) currentCourse.responses.push({ cueIndex: unused.index, tap: time, asynchronyMs: (time - unused.cue) * 1000 }); else currentCourse.responses.push({ cueIndex: null, tap: time, asynchronyMs: null }); animateTap();
+  if (unused && Math.abs(unused.cue - time) <= currentCourse.interval / 2) {
+    currentCourse.responses.push({ cueIndex: unused.index, tap: time, asynchronyMs: (time - unused.cue) * 1000 });
+    // As soon as the final cue has received its tap, arm the unscored continuation tap.
+    // This prevents a quick continuation tap being swallowed by the old response window.
+    if (unused.index === currentCourse.responseCues - 1 && time >= unused.cue) finishCalibrationCourse();
+  } else currentCourse.responses.push({ cueIndex: null, tap: time, asynchronyMs: null });
+  animateTap();
 }
 function finishCalibrationCourse() {
   if (!currentCourse || !['running', 'familiarising'].includes(calibrationState)) return;
