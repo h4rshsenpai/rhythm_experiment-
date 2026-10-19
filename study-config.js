@@ -5,7 +5,7 @@ window.STUDY_CONFIG = {
     // All courses use the same 120 BPM timing (one cue every 500 ms).
     bpm: 120,
     familiarisationCues: 4,
-    trialDurationSeconds: 30,
+    trialDurationSeconds: 10,
     pitches: [400, 800, 1200],
   },
 };
